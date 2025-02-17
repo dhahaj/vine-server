@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Spreadsheet Parser</title>
+    <style>
+        /* Global Dark Theme */
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+            margin: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #f0f0f0;
+            margin-bottom: 20px;
+        }
+
+        /* Controls */
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Hide file inputs */
+        #fileInput,
+        #dbInput {
+            display: none;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-size: 1em;
+            margin: 5px;
+            background: #1e1e1e;
+            color: #e0e0e0;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #3a3a3a;
+            color: #e0e0e0;
+            font-size: 1em;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background: #555;
+        }
+
+        /* Table Container (Own View) */
+        #tableView {
+            max-height: 80vh;
+            overflow-y: auto;
+            margin-bottom: 60px;
+            border: 1px solid #333;
+        }
+
+        /* Table Styling */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        th,
+        td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background: #333;
+            color: #f0f0f0;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #2a2a2a;
+        }
+
+        tbody tr:hover {
+            background: #3a3a3a;
+        }
+
+        tfoot td {
+            font-weight: bold;
+            background: #333;
+            color: #f0f0f0;
+        }
+
+        a {
+            color: #81a1c1;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Floating Scroll Buttons */
+        .scroll-btn {
+            position: fixed;
+            right: 20px;
+            z-index: 1000;
+            padding: 10px 14px;
+            background: #5e81ac;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            transition: background 0.3s ease;
+        }
+
+        .scroll-btn:hover {
+            background: #81a1c1;
+        }
+
+        #scrollTopBtn {
+            bottom: 80px;
+        }
+
+        #scrollBottomBtn {
+            bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Spreadsheet Parser</h2>
+    <div class="controls">
+        <!-- Hidden file inputs -->
+        <input type="file" id="fileInput" accept=".xlsx, .csv" />
+        <input type="file" id="dbInput" accept=".db" />
+        <button id="importBtn">Import Data (Excel/CSV)</button>
+        <button id="importDbBtn">Import DB (SQLite)</button>
+        <input type="text" id="searchInput" placeholder="Enter regex or text to filter..." />
+        <br>
+        <button id="saveBtn">Save (XLSX)</button>
+        <button id="exportBtn">Export Data (CSV)</button>
+        <button id="exportDbBtn">Export DB (SQLite)</button>
+        <button id="clearBtn">Clear</button>
+        <button id="clearAllBtn">Clear All</button>
+    </div>
+
+    <!-- Table View Container -->
+    <div id="tableView">
+        <table id="dataTable"></table>
+    </div>
+
+    <!-- Floating Scroll Buttons -->
+    <button id="scrollTopBtn" class="scroll-btn" title="Scroll to Top">↑</button>
+    <button id="scrollBottomBtn" class="scroll-btn" title="Scroll to Bottom">↓</button>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/sql-wasm.js"></script>
+    <script>
+        let originalData = [];
+        let currentData = [];
+        let currentSortColumn = null;
+        let currentSortDirection = 1; // 1 = ascending, -1 = descending
+
+        // Define the currency columns.
+        const currencyColumns = ["Estimated Tax Value", "Profit"];
+        // Define the read-only columns.
+        const readOnlyColumns = ["ASIN", "Order Type"];
+        // Add a list of date columns (adjust the column names as needed)
+        const dateColumns = ["Order Date", "Date"];
+        
+        // Helper: Format a value as USD currency.
+        function formatCurrency(value) {
+            const num = typeof value === "number"
+                ? value
+                : parseFloat(value.toString().replace(/[^0-9.-]+/g, ""));
+            if (isNaN(num)) return value;
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(num);
+        }
+
+        // --- Server Integration Functions ---
+
+        // Fetch data from your server endpoint.
+        // function fetchData() {
+        //     fetch('https://vine.soupnazi.cc/api')
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             originalData = data;
+        //             currentData = [...originalData];
+        //             renderTable(currentData);
+        //         })
+        //         .catch(err => console.error("Error fetching data:", err));
+        // }
+        function fetchData() {
+            fetch('https://vine.soupnazi.cc/api')
+                .then(response => {
+                    if (response.status === 401) {
+                        // Redirect to login page if not authenticated
+                        window.location.href = '/login';
+                        throw new Error('Not authenticated');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    originalData = data;
+                    currentData = [...originalData];
+                    renderTable(currentData);
+                })
+                .catch(err => console.error("Error fetching data:", err));
+        }
+
+
+        // Save updated data to your server.
+        function saveData() {
+            fetch('https://vine.soupnazi.cc/api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(originalData)
+            })
+                .then(response => response.json())
+                .then(result => console.log(result.message))
+                .catch(err => console.error("Error saving data:", err));
+        }
+
+        // On page load, fetch data from the server.
+        window.addEventListener("load", () => {
+            fetchData();
+        });
+
+        // --- Import/Export and Table Code ---
+
+        // Import button for Excel/CSV.
+        document.getElementById('importBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        // Import DB button.
+        document.getElementById('importDbBtn').addEventListener('click', () => {
+            document.getElementById('dbInput').click();
+        });
+
+        // Handle Excel/CSV file upload (APPEND NEW DATA).
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.SheetNames[0];
+                let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheet], { defval: "" });
+                // Calculate starting index based on current data length.
+                const startIndex = originalData.length;
+                const newRows = jsonData.map((row, index) => ({ ...row, __index: startIndex + index }));
+                // Append new rows.
+                originalData = originalData.concat(newRows);
+                currentData = [...originalData];
+                // Save to the server.
+                saveData();
+                renderTable(currentData);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Handle DB file import (APPEND NEW DATA).
+        document.getElementById('dbInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const buffer = evt.target.result;
+                initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/${file}` })
+                    .then(SQL => {
+                        const db = new SQL.Database(new Uint8Array(buffer));
+                        const res = db.exec("SELECT * FROM data");
+                        if (res.length === 0) {
+                            alert("No data found in the 'data' table.");
+                            return;
+                        }
+                        const { columns, values } = res[0];
+                        const data = values.map(row => {
+                            const obj = {};
+                            columns.forEach((col, i) => { obj[col] = row[i]; });
+                            return obj;
+                        });
+                        // Append new data
+                        const startIndex = originalData.length;
+                        const newRows = data.map((row, index) => ({ ...row, __index: startIndex + index }));
+                        originalData = originalData.concat(newRows);
+                        currentData = [...originalData];
+                        // Save to the server.
+                        saveData();
+                        renderTable(currentData);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert("Failed to load the database file.");
+                    });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Render the table.
+        function renderTable(data) {
+            const table = document.getElementById('dataTable');
+            table.innerHTML = "";
+            if (!data.length) {
+                table.innerHTML = "<tr><td>No data</td></tr>";
+                return;
+            }
+            const headers = Object.keys(data[0]).filter(key => key !== "__index");
+            let thead = "<thead><tr>";
+            headers.forEach(h => {
+                let arrow = "";
+                if (h === currentSortColumn) {
+                    arrow = currentSortDirection === 1 ? " ▲" : " ▼";
+                }
+                thead += `<th class="sortable" data-column="${h}">${h}${arrow}</th>`;
+            });
+            thead += "</tr></thead>";
+
+            let tbody = "<tbody>";
+            data.forEach(row => {
+                tbody += `<tr data-index="${row.__index}">`;
+                headers.forEach(h => {
+                    let cellValue = row[h];
+                    if (h === "Order Number") {
+                        tbody += `<td data-col="${h}">
+                          <a href="https://www.amazon.com/gp/your-account/order-details?orderID=${cellValue}" target="_blank">
+                            ${cellValue}
+                          </a>
+                        </td>`;
+                    } else if (currencyColumns.includes(h)) {
+                        cellValue = formatCurrency(cellValue);
+                        tbody += `<td data-col="${h}" contenteditable="true" data-currency="true">${cellValue}</td>`;
+                    } else if (readOnlyColumns.includes(h)) {
+                        tbody += `<td data-col="${h}">${cellValue}</td>`;
+                    } else {
+                        tbody += `<td data-col="${h}" contenteditable="true">${cellValue}</td>`;
+                    }
+                });
+                tbody += "</tr>";
+            });
+            tbody += "</tbody>";
+
+            let tfoot = "<tfoot><tr>";
+            headers.forEach((h, index) => {
+                if (index === 0) {
+                    tfoot += `<td><strong>Total</strong></td>`;
+                } else if (currencyColumns.includes(h)) {
+                    let sum = originalData.reduce((acc, row) => {
+                        let num = parseFloat(row[h].toString().replace(/[^0-9.-]+/g, ""));
+                        return acc + (isNaN(num) ? 0 : num);
+                    }, 0);
+                    tfoot += `<td>${formatCurrency(sum)}</td>`;
+                } else {
+                    tfoot += `<td></td>`;
+                }
+            });
+            tfoot += "</tr></tfoot>";
+
+            table.innerHTML = thead + tbody + tfoot;
+
+            table.querySelectorAll("th.sortable").forEach(th => {
+                th.addEventListener("click", (e) => {
+                    const column = e.target.dataset.column;
+                    handleSort(column);
+                });
+            });
+
+            table.querySelectorAll('tbody td[contenteditable="true"]').forEach(cell => {
+                cell.addEventListener('blur', function () {
+                    const rowEl = this.parentElement;
+                    const rowIndex = rowEl.getAttribute("data-index");
+                    const colKey = this.getAttribute("data-col");
+                    let newValue = this.innerText.trim();
+                    if (currencyColumns.includes(colKey)) {
+                        const num = parseFloat(newValue.replace(/[^0-9.-]+/g, ""));
+                        if (!isNaN(num)) {
+                            newValue = num;
+                            this.innerText = formatCurrency(num);
+                        }
+                    }
+                    const origRow = originalData.find(r => r.__index == rowIndex);
+                    if (origRow) origRow[colKey] = newValue;
+                    const curRow = currentData.find(r => r.__index == rowIndex);
+                    if (curRow) curRow[colKey] = newValue;
+                    updateTotals();
+                    // Save updated data to the server.
+                    saveData();
+                });
+            });
+        }
+
+        function updateTotals() {
+            const table = document.getElementById('dataTable');
+            const tfootRow = table.querySelector("tfoot tr");
+            if (!tfootRow) return;
+            const headerCells = table.querySelectorAll('thead th');
+            const headers = Array.from(headerCells).map(cell =>
+                cell.innerText.replace(/[\s▲▼]+$/, "")
+            );
+            headers.forEach((h, index) => {
+                if (index === 0) {
+                    tfootRow.children[index].innerHTML = "<strong>Total</strong>";
+                } else if (currencyColumns.includes(h)) {
+                    let sum = originalData.reduce((acc, row) => {
+                        let num = parseFloat(row[h].toString().replace(/[^0-9.-]+/g, ""));
+                        return acc + (isNaN(num) ? 0 : num);
+                    }, 0);
+                    tfootRow.children[index].innerText = formatCurrency(sum);
+                }
+            });
+        }
+
+
+        function handleSort(column) {
+            if (column === currentSortColumn) {
+                currentSortDirection = -currentSortDirection;
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = 1;
+            }
+            currentData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                // If the column is a date column, parse the dates.
+                if (dateColumns.includes(column)) {
+                    const dateA = new Date(valA);
+                    const dateB = new Date(valB);
+                    return (dateA - dateB) * currentSortDirection;
+                }
+                // If the column is a currency column, parse as numbers.
+                else if (currencyColumns.includes(column)) {
+                    let numA = parseFloat(valA.toString().replace(/[^0-9.-]+/g, ""));
+                    let numB = parseFloat(valB.toString().replace(/[^0-9.-]+/g, ""));
+                    if (isNaN(numA)) numA = 0;
+                    if (isNaN(numB)) numB = 0;
+                    return (numA - numB) * currentSortDirection;
+                }
+                // Otherwise, compare as strings.
+                else {
+                    if (valA < valB) return -1 * currentSortDirection;
+                    if (valA > valB) return 1 * currentSortDirection;
+                    return 0;
+                }
+            });
+            renderTable(currentData);
+        }
+
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const term = e.target.value;
+            let regex;
+            try {
+                regex = new RegExp(term, "i");
+            } catch (err) {
+                regex = null;
+            }
+            if (regex) {
+                currentData = originalData.filter(row =>
+                    Object.keys(row)
+                        .filter(key => key !== "__index")
+                        .some(key => regex.test(row[key].toString()))
+                );
+            } else {
+                const lowerTerm = term.toLowerCase();
+                currentData = originalData.filter(row =>
+                    Object.keys(row)
+                        .filter(key => key !== "__index")
+                        .some(key => row[key].toString().toLowerCase().includes(lowerTerm))
+                );
+            }
+            renderTable(currentData);
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            const exportData = originalData.map(({ __index, ...rest }) => rest);
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'UpdatedData');
+            XLSX.writeFile(wb, 'updated_data.xlsx');
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const exportData = originalData.map(({ __index, ...rest }) => rest);
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const csv = XLSX.utils.sheet_to_csv(ws);
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.setAttribute("download", "exported_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        document.getElementById('exportDbBtn').addEventListener('click', () => {
+            if (!originalData.length) return;
+            initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/${file}` })
+                .then(SQL => {
+                    const db = new SQL.Database();
+                    const columns = Object.keys(originalData[0]).filter(key => key !== "__index");
+                    const createStmt = `CREATE TABLE data (${columns.map(col => '"' + col + '" TEXT').join(", ")});`;
+                    db.run(createStmt);
+                    const placeholders = columns.map(_ => '?').join(',');
+                    const insertStmt = db.prepare(`INSERT INTO data VALUES (${placeholders});`);
+                    originalData.forEach(row => {
+                        const values = columns.map(col => row[col]);
+                        insertStmt.run(values);
+                    });
+                    insertStmt.free();
+                    const binaryArray = db.export();
+                    const blob = new Blob([binaryArray], { type: 'application/octet-stream' });
+                    const link = document.createElement("a");
+                    const url = URL.createObjectURL(blob);
+                    link.href = url;
+                    link.setAttribute("download", "data.db");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('searchInput').value = "";
+            currentData = [...originalData];
+            renderTable(currentData);
+        });
+
+        document.getElementById('clearAllBtn').addEventListener('click', () => {
+            if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
+                originalData = [];
+                currentData = [];
+                renderTable(currentData);
+                // Clear on the server as well.
+                saveData();
+            }
+        });
+
+        // Floating Scroll Buttons (scrolling the table container)
+        document.getElementById('scrollTopBtn').addEventListener('click', () => {
+            const tableView = document.getElementById('tableView');
+            tableView.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        document.getElementById('scrollBottomBtn').addEventListener('click', () => {
+            const tableView = document.getElementById('tableView');
+            tableView.scrollTo({ top: tableView.scrollHeight, behavior: 'smooth' });
+        });
+
+        // Provide a simple fallback for shadow DOM queries.
+        window.domQueryService = {
+            querySelector: document.querySelector.bind(document),
+            querySelectorAll: document.querySelectorAll.bind(document)
+        };
+    </script>
+</body>
+
+</html>
