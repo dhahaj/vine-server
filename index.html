@@ -181,6 +181,8 @@
         const readOnlyColumns = ["ASIN", "Order Type"];
         // Add a list of date columns (adjust the column names as needed)
         const dateColumns = ["Order Date", "Date"];
+        // frontend server URL
+        const url = 'https://vine.soupnazi.cc/api';
         
         // Helper: Format a value as USD currency.
         function formatCurrency(value) {
@@ -194,21 +196,10 @@
             }).format(num);
         }
 
+        
         // --- Server Integration Functions ---
-
-        // Fetch data from your server endpoint.
-        // function fetchData() {
-        //     fetch('https://vine.soupnazi.cc/api')
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             originalData = data;
-        //             currentData = [...originalData];
-        //             renderTable(currentData);
-        //         })
-        //         .catch(err => console.error("Error fetching data:", err));
-        // }
         function fetchData() {
-            fetch('https://vine.soupnazi.cc/api')
+            fetch(url)
                 .then(response => {
                     if (response.status === 401) {
                         // Redirect to login page if not authenticated
@@ -228,7 +219,7 @@
 
         // Save updated data to your server.
         function saveData() {
-            fetch('https://vine.soupnazi.cc/api', {
+            fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(originalData)
