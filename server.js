@@ -50,17 +50,19 @@ passport.deserializeUser(function (id, done) {
 });
 
 // Middleware to ensure the user is authenticated
-function ensureAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    // res.status(401).json({ message: 'Not authenticated' });
-    res.redirect('/login');
-}
+// function ensureAuthenticated(req, res, next) {
+//     console.log('Checking authentication');
+//     if (req.isAuthenticated()) {
+//         return next();
+//     }
+//     // res.status(401).json({ message: 'Not authenticated' });
+//     res.redirect('/login');
+// }
 
 // --- Authentication Routes ---
 // Display a simple login form.
 app.get('/login', (req, res) => {
+    console.log('Login page requested');
     res.send(`
 <!DOCTYPE html>
 <html lang="en">
@@ -162,8 +164,7 @@ app.get('/login', (req, res) => {
 });
 
 // Process login submissions.
-app.post(
-    '/login',
+app.post('/login',
     express.urlencoded({ extended: false }),
     passport.authenticate('local', {
         successRedirect: '/',
@@ -173,6 +174,7 @@ app.post(
 
 // Logout route.
 app.get('/logout', (req, res) => {
+    console.log('Logout requested');
     req.logout(() => {
         res.redirect('/login');
     });
@@ -194,7 +196,11 @@ app.get('/data', ensureAuthenticated, (req, res) => {
     console.log('GET request received');
     db.get('SELECT data FROM store WHERE id = 1', (err, row) => {
         if (err) return res.status(500).send(err);
-        const data = row ? JSON.parse(row.data) : [];
+        let data = row ? JSON.parse(row.data) : [];
+        if (!Array.isArray(data)) {
+            // If the stored data isn’t an array, wrap it in one.
+            data = [data];
+        }
         res.json(data);
     });
 });
@@ -228,13 +234,13 @@ app.post('/data', ensureAuthenticated, (req, res) => {
 });
 
 // Serve the main page if authenticated; otherwise, redirect to login.
-// app.get('/', ensureAuthenticated, (req, res) => {
-//     res.sendFile(path.join(__dirname, 'index.html'), (err) => {
-//         if (err) {
-//             res.status(500).send('Error loading index.html');
-//         }
-//     });
-// });
+app.get('/', ensureAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'), (err) => {
+        if (err) {
+            res.status(500).send('Error loading index.html');
+        }
+    });
+});
 
 function ensureAuthenticated(req, res, next) {
     if (req.isAuthenticated()) {
@@ -243,6 +249,5 @@ function ensureAuthenticated(req, res, next) {
     // For API endpoints, return a 401 JSON error.
     res.status(401).json({ message: 'Not authenticated' });
 }
-
 
 app.listen(port, () => console.log(`Server listening on port ${port}`));

@@ -155,6 +155,7 @@
         <button id="exportDbBtn">Export DB (SQLite)</button>
         <button id="clearBtn">Clear</button>
         <button id="clearAllBtn">Clear All</button>
+        <button id="logoutBtn">Logout</button>
     </div>
 
     <!-- Table View Container -->
@@ -555,6 +556,17 @@
         document.getElementById('scrollBottomBtn').addEventListener('click', () => {
             const tableView = document.getElementById('tableView');
             tableView.scrollTo({ top: tableView.scrollHeight, behavior: 'smooth' });
+        });
+
+        // Logout button
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            fetch(url + '/logout', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    window.location.href = '/login';
+                })
+                .catch(err => console.error("Error logging out:", err));
         });
 
         // Provide a simple fallback for shadow DOM queries.
