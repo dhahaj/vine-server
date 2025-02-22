@@ -184,7 +184,7 @@
         const dateColumns = ["Order Date", "Date"];
         // frontend server URL
         const url = 'https://vine.soupnazi.cc/api';
-        
+
         // Helper: Format a value as USD currency.
         function formatCurrency(value) {
             const num = typeof value === "number"
@@ -197,29 +197,105 @@
             }).format(num);
         }
 
-        
+
         // --- Server Integration Functions ---
+        // function fetchData() {
+        //     fetch(url)
+        //         .then(response => {
+        //             if (response.status === 401) {
+        //                 // Redirect to login page if not authenticated
+        //                 window.location.href = '/login';
+        //                 throw new Error('Not authenticated');
+        //             }
+        //             return response.json();
+        //         })
+        //         .then(data => {
+        //             originalData = data;
+                    
+        //             // remove duplicates
+        //             removeDuplicates();
+                    
+        //             currentData = [...originalData];
+        //             renderTable(currentData);
+        //         })
+        //         .catch(err => console.error("Error fetching data:", err));
+        // }
+
         function fetchData() {
-            fetch(url)
-                .then(response => {
-                    if (response.status === 401) {
-                        // Redirect to login page if not authenticated
-                        window.location.href = '/login';
-                        throw new Error('Not authenticated');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    originalData = data;
-                    currentData = [...originalData];
-                    renderTable(currentData);
-                })
-                .catch(err => console.error("Error fetching data:", err));
+            console.log("Fetching data from server...");
+                fetch(url)
+                    .then(response => {
+                        if (response.status === 401) {
+                            window.location.href = '/login';
+                            throw new Error('Not authenticated');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // If data is not an array, replace it with an empty array.
+                        if (!Array.isArray(data)) {
+                            console.warn("Fetched data is not an array; defaulting to []");
+                            data = [];
+                        }
+                        originalData = data;
+                        currentData = [...originalData];
+                        renderTable(currentData);
+                    })
+                    .catch(err => console.error("Error fetching data:", err));
+            }
+
+
+
+
+        // --- Remove Duplicates Function ---
+        // This function will remove duplicate entries from originalData based on ASIN and Order Type.
+        function removeDuplicates() {
+            console.log("Removing duplicates...");
+            const seen = {};
+            const filtered = originalData.filter(row => {
+                // Create a key by concatenating ASIN and Order Type (trimmed and lowercased for consistency).
+                const asin = row["ASIN"] ? row["ASIN"].toString().trim().toLowerCase() : "";
+                const orderType = row["Order Type"] ? row["Order Type"].toString().trim().toLowerCase() : "";
+                const key = asin + '|' + orderType;
+                if (seen[key]) {
+                    console.log(`Duplicate found: ${key}`);
+                    return false; // Duplicate, so skip.
+                } else {
+                    seen[key] = true;
+                    return true;
+                }
+            });
+            // Re-index the filtered data.
+            filtered.forEach((row, index) => row.__index = index);
+            originalData = filtered;
+            currentData = [...originalData];
+            renderTable(currentData);
+            saveData();
         }
+
+        // function removeDuplicates(originalData) {
+        //     const seen = {};
+        //     const filtered = originalData.filter(row => {
+        //         const asin = row["ASIN"] ? row["ASIN"].toString().trim().toLowerCase() : "";
+        //         const orderType = row["Order Type"] ? row["Order Type"].toString().trim().toLowerCase() : "";
+        //         const key = asin + '|' + orderType;
+        //         if (seen[key]) {
+        //             console.log(`Duplicate found: ${key}`);
+        //             return false;
+        //         } else {
+        //             seen[key] = true;
+        //             return true;
+        //         }
+        //     });
+        //     filtered.forEach((row, index) => row.__index = index);
+        //     return filtered;
+        // }
+
 
 
         // Save updated data to your server.
         function saveData() {
+            console.log("Saving data to server...");
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -560,13 +636,10 @@
 
         // Logout button
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            fetch(url + '/logout', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    alert(data.message);
-                    window.location.href = '/login';
-                })
-                .catch(err => console.error("Error logging out:", err));
+            // Clear the session or token
+            // Redirect to the login page
+            window.location.href = '/logout';
+                        
         });
 
         // Provide a simple fallback for shadow DOM queries.
