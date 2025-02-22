@@ -12,5 +12,9 @@
     "url": "https://github.com/dhahaj/vine-server"
   },
   "author": "dhahaj@gmail.com",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.7"
+  }
 }
