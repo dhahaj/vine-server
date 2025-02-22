@@ -174,11 +174,17 @@ app.post('/login',
 
 // Logout route.
 app.get('/logout', (req, res) => {
-    console.log('Logout requested');
-    req.logout(() => {
+    console.log('Logout requested');    
+    req.logout(function (err) { // Use the logout function with a callback
+        console.log('User logged out');
+        if (err) { 
+            console.error('Error logging out:', err);
+            return next(err);
+        }
         res.redirect('/login');
     });
 });
+
 
 // --- Data Endpoints (Secured) ---
 
@@ -191,56 +197,62 @@ const db = new sqlite3.Database('data.db', (err) => {
 // Create table if needed
 db.run('CREATE TABLE IF NOT EXISTS store (id INTEGER PRIMARY KEY, data TEXT)');
 
+let temp = {};
+
+// POST endpoint (secured)
+app.post('/data', ensureAuthenticated, (req, res) => {
+    console.log('POST request received');
+    // console.log('Received data:', req.body);
+    temp = req;
+    let newData = req.body;
+    // If newData is not an array:
+    if (!Array.isArray(newData)) {
+        console.warn("Received data is not an array. Converting to an array.");
+        // If it's an object with keys, wrap it in an array; otherwise, default to an empty array.
+        newData = (newData && Object.keys(newData).length > 0) ? [newData] : [];
+        // return res.status(400).json({ message: 'Data must be an array' });
+        return res.status(400).send('Data must be an array');
+    }
+    const jsonData = JSON.stringify(newData, null, 2);
+    db.get('SELECT id FROM store WHERE id = 1', (err, row) => {
+        if (err) return res.status(500).send(err);
+        if (row) {
+            db.run('UPDATE store SET data = ? WHERE id = 1', jsonData, function(err) {
+                if (err) return res.status(500).send(err);
+                res.status(200).send('Data updated successfully');
+            });
+        } else {
+            db.run('INSERT INTO store (id, data) VALUES (1, ?)', jsonData, function(err) {
+                if (err) return res.status(500).send(err);
+                res.status(200).send('Data updated successfully');
+                // res.json({ message: 'Data saved successfully' });
+            });
+        }
+    });
+});
+
 // GET endpoint (secured)
 app.get('/data', ensureAuthenticated, (req, res) => {
     console.log('GET request received');
     db.get('SELECT data FROM store WHERE id = 1', (err, row) => {
         if (err) return res.status(500).send(err);
+        // If there's no row, default to an empty array.
         let data = row ? JSON.parse(row.data) : [];
+        // If data is not an array (for example, if it's an object), handle it:
         if (!Array.isArray(data)) {
-            // If the stored data isn’t an array, wrap it in one.
-            data = [data];
+            console.warn("Stored data is not an array. Converting to an array.");
+            // Option 1: If you expect an array, simply default to [].
+            data = [];
+            // Option 2: Alternatively, you could wrap a non-empty object:
+            // data = Object.keys(data).length ? [data] : [];
         }
+        console.log("Sending data:", data);
         res.json(data);
     });
 });
 
-// POST endpoint (secured)
-app.post('/data', ensureAuthenticated, (req, res) => {
-    const newData = req.body;
-    const jsonData = JSON.stringify(newData, null, 2);
-    db.get('SELECT id FROM store WHERE id = 1', (err, row) => {
-        if (err) return res.status(500).send(err);
-        if (row) {
-            db.run(
-                'UPDATE store SET data = ? WHERE id = 1',
-                jsonData,
-                function (err) {
-                    if (err) return res.status(500).send(err);
-                    res.json({ message: 'Data saved successfully' });
-                }
-            );
-        } else {
-            db.run(
-                'INSERT INTO store (id, data) VALUES (1, ?)',
-                jsonData,
-                function (err) {
-                    if (err) return res.status(500).send(err);
-                    res.json({ message: 'Data saved successfully' });
-                }
-            );
-        }
-    });
-});
 
-// Serve the main page if authenticated; otherwise, redirect to login.
-app.get('/', ensureAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'), (err) => {
-        if (err) {
-            res.status(500).send('Error loading index.html');
-        }
-    });
-});
+
 
 function ensureAuthenticated(req, res, next) {
     if (req.isAuthenticated()) {
@@ -249,5 +261,6 @@ function ensureAuthenticated(req, res, next) {
     // For API endpoints, return a 401 JSON error.
     res.status(401).json({ message: 'Not authenticated' });
 }
+
 
 app.listen(port, () => console.log(`Server listening on port ${port}`));
