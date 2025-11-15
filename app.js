@@ -3,8 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const passport = require('passport');
+const path = require('path');
 const authRoutes = require('./routes/auth');
 const dataRoutes = require('./routes/data');
+const { ensureAuthenticatedRedirect } = require('./middleware/auth');
 const passportConfig = require('./config/passport'); // Import passport config
 require('dotenv').config();
 
@@ -28,7 +30,7 @@ app.use(
         cookie: {
             httpOnly: true,  // Prevent XSS attacks
             secure: process.env.NODE_ENV === 'production',  // HTTPS only in production
-            sameSite: 'strict',  // CSRF protection
+            sameSite: 'lax',  // CSRF protection (more compatible than 'strict')
             maxAge: 24 * 60 * 60 * 1000  // 24 hours
         }
     })
@@ -43,5 +45,10 @@ passportConfig(passport);
 // Use routes
 app.use('/', authRoutes);
 app.use('/', dataRoutes);
+
+// Serve index.html at root path (requires authentication)
+app.get('/', ensureAuthenticatedRedirect, (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.listen(port, () => console.log(`Server listening on port ${port}`));
