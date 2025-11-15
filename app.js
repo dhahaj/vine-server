@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const passport = require('passport');
+const path = require('path');
 const authRoutes = require('./routes/auth');
 const dataRoutes = require('./routes/data');
 const passportConfig = require('./config/passport'); // Import passport config
@@ -43,5 +44,10 @@ passportConfig(passport);
 // Use routes
 app.use('/', authRoutes);
 app.use('/', dataRoutes);
+
+// Serve index.html at root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 app.listen(port, () => console.log(`Server listening on port ${port}`));
