@@ -30,7 +30,7 @@ app.use(
         cookie: {
             httpOnly: true,  // Prevent XSS attacks
             secure: process.env.NODE_ENV === 'production',  // HTTPS only in production
-            sameSite: 'strict',  // CSRF protection
+            sameSite: 'lax',  // CSRF protection (more compatible than 'strict')
             maxAge: 24 * 60 * 60 * 1000  // 24 hours
         }
     })

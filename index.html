@@ -226,7 +226,9 @@
 
         function fetchData() {
             console.log("Fetching data from server...");
-                fetch(url)
+                fetch(url, {
+                    credentials: 'include'  // Send cookies for authentication
+                })
                     .then(response => {
                         if (response.status === 401) {
                             window.location.href = '/login';
@@ -302,7 +304,8 @@
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(originalData)
+                body: JSON.stringify(originalData),
+                credentials: 'include'  // Send cookies for authentication
             })
                 .then(response => response.json())
                 .then(result => console.log(result.message))
