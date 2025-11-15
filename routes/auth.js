@@ -112,15 +112,15 @@ router.post(
     })
 );
 
-router.get('/logout', (req, res) => {
+router.get('/logout', (req, res, next) => {
     console.log('Logout requested');
     req.logout(function (err) {
         // Use the logout function with a callback
-        console.log('User logged out');
         if (err) {
             console.error('Error logging out:', err);
             return next(err);
         }
+        console.log('User logged out');
         res.redirect('/login');
     });
 });
