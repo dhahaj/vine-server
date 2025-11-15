@@ -6,6 +6,7 @@ const passport = require('passport');
 const path = require('path');
 const authRoutes = require('./routes/auth');
 const dataRoutes = require('./routes/data');
+const { ensureAuthenticatedRedirect } = require('./middleware/auth');
 const passportConfig = require('./config/passport'); // Import passport config
 require('dotenv').config();
 
@@ -45,8 +46,8 @@ passportConfig(passport);
 app.use('/', authRoutes);
 app.use('/', dataRoutes);
 
-// Serve index.html at root path
-app.get('/', (req, res) => {
+// Serve index.html at root path (requires authentication)
+app.get('/', ensureAuthenticatedRedirect, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 

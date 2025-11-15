@@ -6,4 +6,11 @@ function ensureAuthenticated(req, res, next) {
     res.status(401).json({ message: 'Not authenticated' });
 }
 
-module.exports = { ensureAuthenticated };
+function ensureAuthenticatedRedirect(req, res, next) {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.redirect('/login');
+}
+
+module.exports = { ensureAuthenticated, ensureAuthenticatedRedirect };
