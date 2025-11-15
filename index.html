@@ -226,7 +226,7 @@
 
         function fetchData() {
             console.log("Fetching data from server...");
-                fetch(url)
+                fetch(url + '/data')
                     .then(response => {
                         if (response.status === 401) {
                             window.location.href = '/login';
@@ -299,7 +299,7 @@
         // Save updated data to your server.
         function saveData() {
             console.log("Saving data to server...");
-            fetch(url, {
+            fetch(url + '/data', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(originalData)
