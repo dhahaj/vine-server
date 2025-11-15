@@ -12,14 +12,25 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
-app.use(cors());
 
-// Set up sessions
+// CORS configuration - restrict to specific origins
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true  // Allow cookies for session authentication
+}));
+
+// Set up sessions with security options
 app.use(
     session({
         secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
+        cookie: {
+            httpOnly: true,  // Prevent XSS attacks
+            secure: process.env.NODE_ENV === 'production',  // HTTPS only in production
+            sameSite: 'strict',  // CSRF protection
+            maxAge: 24 * 60 * 60 * 1000  // 24 hours
+        }
     })
 );
 

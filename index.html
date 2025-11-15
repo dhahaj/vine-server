@@ -182,8 +182,11 @@
         const readOnlyColumns = ["ASIN", "Order Type"];
         // Add a list of date columns (adjust the column names as needed)
         const dateColumns = ["Order Date", "Date"];
-        // frontend server URL
-        const url = 'https://vine.soupnazi.cc/api';
+
+        // API URL - auto-detect environment
+        const url = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? `http://${window.location.hostname}:${window.location.port || 3000}`
+            : 'https://vine.soupnazi.cc/api';
 
         // Helper: Format a value as USD currency.
         function formatCurrency(value) {

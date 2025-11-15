@@ -1,20 +1,18 @@
 // config/passport.js
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
-const sqlite3 = require('sqlite3').verbose();
-require('dotenv').config();
+const { userDb } = require('../db'); // Use shared database connection
 
 module.exports = function (passport) {
     passport.use(
         new LocalStrategy(async function (username, password, done) {
-            const userdbFile = process.env.USER_DB_FILE || 'users.db';
-            const db = new sqlite3.Database(userdbFile);
-
-            db.get(
+            // Use shared database connection - no need to create/close
+            userDb.get(
                 'SELECT id, password FROM users WHERE username = ?',
                 [username],
                 async (err, row) => {
                     if (err) {
+                        console.error('Database error during login:', err);
                         return done(err);
                     }
                     if (!row) {
@@ -39,9 +37,8 @@ module.exports = function (passport) {
                             });
                         }
                     } catch (bcryptErr) {
+                        console.error('Bcrypt error:', bcryptErr);
                         return done(bcryptErr);
-                    } finally {
-                        db.close();
                     }
                 }
             );
@@ -53,18 +50,18 @@ module.exports = function (passport) {
     });
 
     passport.deserializeUser(function (id, done) {
-        const db = new sqlite3.Database('users.db');
-        db.get(
+        // Use shared database connection - no need to create/close
+        userDb.get(
             'SELECT id, username FROM users WHERE id = ?',
             [id],
             (err, row) => {
                 if (err) {
+                    console.error('Database error during deserialization:', err);
                     return done(err);
                 }
                 if (!row) {
                     return done(new Error('User not found'));
                 }
-                db.close();
                 return done(null, row);
             }
         );

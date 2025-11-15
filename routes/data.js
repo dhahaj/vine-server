@@ -1,17 +1,11 @@
 // routes/data.js
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
+const { dataDb } = require('../db'); // Use shared database connection
 const { ensureAuthenticated } = require('../middleware/auth'); // Import middleware
 
-// Open (or create) the SQLite database - You might want to move this database connection to a separate module
-const db = new sqlite3.Database('data.db', (err) => {
-    if (err) console.error('Error opening data.db', err);
-    else console.log('Connected to data.db');
-});
-
-// Create table if needed - Move this to a database initialization script
-db.run('CREATE TABLE IF NOT EXISTS store (id INTEGER PRIMARY KEY, data TEXT)');
+// Use the shared database connection (already initialized in db.js)
+const db = dataDb;
 
 // POST endpoint (secured)
 router.post('/data', ensureAuthenticated, (req, res) => {
@@ -22,22 +16,28 @@ router.post('/data', ensureAuthenticated, (req, res) => {
         console.warn('Received data is not an array. Converting to an array.');
         newData = newData && Object.keys(newData).length > 0 ? [newData] : [];
         if (!Array.isArray(newData)) {
-            return res.status(400).send('Data must be an array'); //Ensure we really return
+            return res.status(400).json({ error: 'Data must be an array' });
         }
     }
 
     const jsonData = JSON.stringify(newData, null, 2);
 
     db.get('SELECT id FROM store WHERE id = 1', (err, row) => {
-        if (err) return res.status(500).send(err);
+        if (err) {
+            console.error('Database error (SELECT):', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
 
         if (row) {
             db.run(
                 'UPDATE store SET data = ? WHERE id = 1',
                 jsonData,
                 function (err) {
-                    if (err) return res.status(500).send(err);
-                    res.status(200).send('Data updated successfully');
+                    if (err) {
+                        console.error('Database error (UPDATE):', err);
+                        return res.status(500).json({ error: 'Internal server error' });
+                    }
+                    res.status(200).json({ message: 'Data updated successfully' });
                 }
             );
         } else {
@@ -45,8 +45,11 @@ router.post('/data', ensureAuthenticated, (req, res) => {
                 'INSERT INTO store (id, data) VALUES (1, ?)',
                 jsonData,
                 function (err) {
-                    if (err) return res.status(500).send(err);
-                    res.status(200).send('Data saved successfully');
+                    if (err) {
+                        console.error('Database error (INSERT):', err);
+                        return res.status(500).json({ error: 'Internal server error' });
+                    }
+                    res.status(200).json({ message: 'Data saved successfully' });
                 }
             );
         }
@@ -57,16 +60,25 @@ router.post('/data', ensureAuthenticated, (req, res) => {
 router.get('/data', ensureAuthenticated, (req, res) => {
     console.log('GET request received');
     db.get('SELECT data FROM store WHERE id = 1', (err, row) => {
-        if (err) return res.status(500).send(err);
-
-        let data = row ? JSON.parse(row.data) : [];
-
-        if (!Array.isArray(data)) {
-            console.warn(
-                'Stored data is not an array. Converting to an array.'
-            );
-            data = [];
+        if (err) {
+            console.error('Database error (GET):', err);
+            return res.status(500).json({ error: 'Internal server error' });
         }
+
+        let data = [];
+        if (row) {
+            try {
+                data = JSON.parse(row.data);
+                if (!Array.isArray(data)) {
+                    console.warn('Stored data is not an array. Converting to an array.');
+                    data = [];
+                }
+            } catch (parseErr) {
+                console.error('Error parsing stored data:', parseErr);
+                data = [];
+            }
+        }
+
         console.log('Sending data:', data);
         res.json(data);
     });
